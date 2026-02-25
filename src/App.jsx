@@ -460,19 +460,8 @@ const App = () => {
     { id: 'horizontal', label: '3D Horizontal Twist' },
     { id: 'ticker', label: '2D Ticker Tape' },
     { id: 'matrix', label: '2D Column March' },
-    { id: 'stutter_wave', label: '2D Stutter Wave' },
-    { id: 'glitch', label: '2D Glitch Step' },
-    { id: 'typewriter', label: '2D Typewriter' },
-    { id: 'checker', label: '2D Checker Flash' },
-    { id: 'scanline', label: '2D Scanline' },
-    { id: 'zip', label: '2D Zip Flow' },
-    { id: 'blink', label: '2D Chaos Blink' },
-    { id: 'cascade', label: '2D Step Cascade' },
-    { id: 'alternating', label: '2D Alt Row Shift' },
     { id: 'fractal', label: '3D Fractal Noise' },
     { id: 'snake', label: '3D Tumble Snake' },
-    { id: 'float', label: '3D Float & Sway' },
-    { id: 'pop', label: '3D Random Pop' }
   ];
 
   return (
