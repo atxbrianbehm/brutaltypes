@@ -101,11 +101,12 @@ export function useThreeScene({
     const canvas = document.createElement('canvas')
     const h = 512
     const ctx = canvas.getContext('2d')
+    const padX = 48
     const fontStr = `900 500px ${fontFamily}`
     ctx.font = fontStr
     const displayStr = (content || ' ').toUpperCase()
     const metrics = ctx.measureText(displayStr)
-    const w = Math.ceil(metrics.width)
+    const w = Math.ceil(metrics.width) + padX * 2
 
     canvas.width = w
     canvas.height = h
@@ -142,10 +143,10 @@ export function useThreeScene({
     ctx.fillStyle = '#0f1115'
     ctx.fillRect(0, 0, 256, 256)
     ctx.fillStyle = '#ffffff'
-    ctx.font = `900 160px ${fontFamily}`
+    ctx.font = `900 148px ${fontFamily}`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(char.toUpperCase(), 128, 128)
+    ctx.fillText(char.toUpperCase(), 128, 132)
 
     const tex = new THREE.CanvasTexture(canvas)
     tex.colorSpace = THREE.SRGBColorSpace
@@ -205,7 +206,7 @@ export function useThreeScene({
         const y_flat = pos.getY(i)
         const theta = x_flat
         const r = k * theta + 0.6 + y_flat
-        pos.setXY(i, r * Math.cos(-theta), r * Math.sin(-theta))
+        pos.setXY(i, r * Math.cos(theta), r * Math.sin(theta))
         const u = (x_flat / (turns * Math.PI * 2)) * uRepeat
         const v = (y_flat + height / 2) / height
         uvs.setXY(i, u, v)
@@ -246,8 +247,8 @@ export function useThreeScene({
           const y_flat = pos.getY(i)
           const theta = x_flat
           const rad = radius + y_flat
-          pos.setXY(i, rad * Math.cos(-theta), rad * Math.sin(-theta))
-          const u = 1.0 - ((x_flat + Math.PI) / (Math.PI * 2)) * uRepeat
+          pos.setXY(i, rad * Math.cos(theta), rad * Math.sin(theta))
+          const u = ((x_flat + Math.PI) / (Math.PI * 2)) * uRepeat
           const v = (y_flat + ringHeight / 2) / ringHeight
           uvs.setXY(i, u, v)
         }
