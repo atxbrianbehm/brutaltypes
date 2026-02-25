@@ -14,7 +14,7 @@ const App = () => {
   const [seed, setSeed] = useState(123);
 
   // --- Animation Controllers ---
-  const [rawSpeed, setRawSpeed] = useState(1.4);
+  const [rawSpeed, setRawSpeed] = useState(1.2);
 
   const [phase, setPhase] = useState(0.12);
   const [depth, setDepth] = useState(0.20);
@@ -24,6 +24,7 @@ const App = () => {
 
   // --- Color & Font Controllers ---
   const [accentColor, setAccentColor] = useState(palette.accent);
+  const [backgroundColor, setBackgroundColor] = useState('#000000');
   const [isColorEnabled, setIsColorEnabled] = useState(true);
   const [fontFamily, setFontFamily] = useState('ui-sans-serif, system-ui, sans-serif');
   const [isFontLoading, setIsFontLoading] = useState(false);
@@ -33,8 +34,12 @@ const App = () => {
   const [isRotationEnabled, setIsRotationEnabled] = useState(true);
   const [isWanderEnabled, setIsWanderEnabled] = useState(true);
 
-  // Logarithmic Speed: v = (x^2) * 0.25 for extreme slow-motion control
-  const getMappedSpeed = (val) => Math.pow(val, 2) * 0.25;
+  const getMappedSpeed = (val) => Math.pow(val, 1.8) * 0.12;
+  const getMappedRotation = (val) => {
+    const mag = Math.abs(val);
+    if (mag < 0.06) return 0;
+    return Math.sign(val) * Math.pow(mag, 1.6) * 0.28;
+  };
 
   const { mountRef } = useThreeScene({
     text,
@@ -43,9 +48,10 @@ const App = () => {
     speed: getMappedSpeed(rawSpeed),
     phase,
     depth,
-    rotSpeed,
+    rotSpeed: getMappedRotation(rotSpeed),
     posterize: POSTERIZE_STEPS[posterizeIdx],
     accentColor,
+    backgroundColor,
     isColorEnabled,
     isSpeedEnabled,
     isRotationEnabled,
@@ -69,7 +75,7 @@ const App = () => {
   };
 
   const handleRotChange = (val) => {
-    if (Math.abs(val) < 0.2) setRotSpeed(0);
+    if (Math.abs(val) < 0.06) setRotSpeed(0);
     else setRotSpeed(val);
   };
 
@@ -87,7 +93,7 @@ const App = () => {
   ];
 
   return (
-    <div className="relative w-full h-screen overflow-hidden font-sans" style={{ background: palette.bg, color: palette.ink }}>
+    <div className="relative w-full h-screen overflow-hidden font-sans" style={{ background: backgroundColor, color: palette.ink }}>
       <div ref={mountRef} className="absolute inset-0" />
 
       <div className={`absolute top-6 left-1/2 -translate-x-1/2 w-[90%] max-w-lg z-50 transition-all ${showUI ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
@@ -129,7 +135,7 @@ const App = () => {
                   </div>
                   <span style={{ color: palette.accent }}>{getMappedSpeed(rawSpeed).toFixed(3)}</span>
                 </div>
-                <input type="range" min="0" max="4" step="0.01" value={rawSpeed} onChange={(e) => setRawSpeed(parseFloat(e.target.value))} className="w-full h-1 rounded-lg appearance-none" style={{ background: 'rgba(10,11,14,0.16)', accentColor: palette.accent }} disabled={!isSpeedEnabled} />
+                <input type="range" min="0" max="2.2" step="0.005" value={rawSpeed} onChange={(e) => setRawSpeed(parseFloat(e.target.value))} className="w-full h-1 rounded-lg appearance-none" style={{ background: 'rgba(10,11,14,0.16)', accentColor: palette.accent }} disabled={!isSpeedEnabled} />
               </div>
 
               <div className="space-y-2">
@@ -138,9 +144,9 @@ const App = () => {
                     <input type="checkbox" checked={isRotationEnabled} onChange={() => setIsRotationEnabled(!isRotationEnabled)} className="w-3 h-3" style={{ accentColor: palette.accent }} />
                     <span>Rotation</span>
                   </div>
-                  <span style={{ color: rotSpeed === 0 ? palette.accent : palette.muted }}>{rotSpeed === 0 ? "STOP" : rotSpeed.toFixed(2)}</span>
+                  <span style={{ color: rotSpeed === 0 ? palette.accent : palette.muted }}>{rotSpeed === 0 ? "STOP" : getMappedRotation(rotSpeed).toFixed(2)}</span>
                 </div>
-                <input type="range" min="-4" max="4" step="0.01" value={rotSpeed} onChange={(e) => handleRotChange(parseFloat(e.target.value))} className="w-full h-1 rounded-lg appearance-none" style={{ background: 'rgba(10,11,14,0.16)', accentColor: palette.accent }} disabled={!isRotationEnabled} />
+                <input type="range" min="-1.5" max="1.5" step="0.005" value={rotSpeed} onChange={(e) => handleRotChange(parseFloat(e.target.value))} className="w-full h-1 rounded-lg appearance-none" style={{ background: 'rgba(10,11,14,0.16)', accentColor: palette.accent }} disabled={!isRotationEnabled} />
               </div>
             </div>
 
@@ -163,6 +169,18 @@ const App = () => {
                 <div className="flex items-center gap-2">
                   <input type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="w-8 h-5 bg-transparent border-none cursor-pointer" disabled={!isColorEnabled} />
                   <span className="text-[9px] font-mono uppercase" style={{ color: palette.muted }}>{isColorEnabled ? accentColor : 'OFF'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-[9px] font-bold uppercase" style={{ color: palette.muted }}>
+                  <span>Background</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} className="w-8 h-5 bg-transparent border-none cursor-pointer" />
+                  <span className="text-[9px] font-mono uppercase" style={{ color: palette.muted }}>{backgroundColor}</span>
                 </div>
               </div>
             </div>

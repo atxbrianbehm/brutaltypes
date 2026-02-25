@@ -18,6 +18,7 @@ export function useThreeScene({
   rotSpeed,
   posterize,
   accentColor,
+  backgroundColor,
   isColorEnabled,
   isSpeedEnabled,
   isRotationEnabled,
@@ -38,6 +39,17 @@ export function useThreeScene({
     envMap: null
   })
 
+  const cameraStateRef = useRef({
+    isDragging: false,
+    dragMode: 'none',
+    lastX: 0,
+    lastY: 0,
+    yaw: 0,
+    pitch: 0,
+    radius: 10,
+    target: new THREE.Vector3(0, 0, 0)
+  })
+
   const stateRef = useRef({})
   useEffect(() => {
     stateRef.current = {
@@ -50,6 +62,7 @@ export function useThreeScene({
       rotSpeed,
       posterize,
       accentColor,
+      backgroundColor,
       isColorEnabled,
       isSpeedEnabled,
       isRotationEnabled,
@@ -66,6 +79,7 @@ export function useThreeScene({
     rotSpeed,
     posterize,
     accentColor,
+    backgroundColor,
     isColorEnabled,
     isSpeedEnabled,
     isRotationEnabled,
@@ -73,13 +87,24 @@ export function useThreeScene({
     fontFamily
   ])
 
+  const applyCameraTransform = (camera) => {
+    const c = cameraStateRef.current
+    const cosPitch = Math.cos(c.pitch)
+    camera.position.set(
+      c.target.x + c.radius * Math.sin(c.yaw) * cosPitch,
+      c.target.y + c.radius * Math.sin(c.pitch),
+      c.target.z + c.radius * Math.cos(c.yaw) * cosPitch
+    )
+    camera.lookAt(c.target)
+  }
+
   const createEnvMap = () => {
     const size = 128
     const canvas = document.createElement('canvas')
     canvas.width = size
     canvas.height = size
     const ctx = canvas.getContext('2d')
-    ctx.fillStyle = palette.bg
+    ctx.fillStyle = backgroundColor
     ctx.fillRect(0, 0, size, size)
     for (let i = 0; i < 8; i++) {
       for (let j = 0; j < 8; j++) {
@@ -95,7 +120,8 @@ export function useThreeScene({
 
   const getRingTex = (content) => {
     const { texCache } = sceneRef.current
-    const key = `ring-final-${content}-${fontFamily}`
+    const textColorKey = isColorEnabled ? accentColor : palette.ink
+    const key = `ring-final-${content}-${fontFamily}-${textColorKey}`
     if (texCache.has(key)) return texCache.get(key)
 
     const canvas = document.createElement('canvas')
@@ -113,7 +139,7 @@ export function useThreeScene({
 
     ctx.fillStyle = palette.bg
     ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = palette.ink
+    ctx.fillStyle = textColorKey
     ctx.font = fontStr
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -132,7 +158,8 @@ export function useThreeScene({
 
   const getCharTex = (char) => {
     const { texCache } = sceneRef.current
-    const charKey = `char-final-${char.toUpperCase()}-${fontFamily}`
+    const textColorKey = isColorEnabled ? accentColor : palette.ink
+    const charKey = `char-final-${char.toUpperCase()}-${fontFamily}-${textColorKey}`
     if (texCache.has(charKey)) return texCache.get(charKey)
 
     const canvas = document.createElement('canvas')
@@ -142,7 +169,7 @@ export function useThreeScene({
     const ctx = canvas.getContext('2d')
     ctx.fillStyle = palette.bg
     ctx.fillRect(0, 0, 256, 256)
-    ctx.fillStyle = palette.ink
+    ctx.fillStyle = textColorKey
     ctx.font = `900 148px ${fontFamily}`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -163,8 +190,11 @@ export function useThreeScene({
     while (group.children.length > 0) {
       const obj = group.children[0]
       obj.geometry.dispose()
-      if (obj.material.map) obj.material.map.dispose()
-      obj.material.dispose()
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+      mats.forEach((m) => {
+        if (m.map) m.map.dispose()
+        m.dispose()
+      })
       group.remove(obj)
     }
     blocks.length = 0
@@ -214,10 +244,9 @@ export function useThreeScene({
       geometry.computeVertexNormals()
       const mat = new THREE.MeshStandardMaterial({
         map: ringTex,
-        metalnessMap: ringTex,
-        roughness: 0.08,
-        metalness: 0.9,
-        envMapIntensity: 1.8,
+        roughness: 0.82,
+        metalness: 0.08,
+        envMapIntensity: 0.12,
         side: THREE.DoubleSide,
         transparent: true,
         emissive: currentEmissiveColor,
@@ -236,29 +265,42 @@ export function useThreeScene({
 
       for (let r = 1; r <= ringCount; r++) {
         const radius = r * ringGap
-        const geom = new THREE.PlaneGeometry(Math.PI * 2, ringHeight, 128, 1)
-        const pos = geom.attributes.position
-        const uvs = geom.attributes.uv
+        const useExtrudedBand = s.mode === 'z-ripple'
+        const zThickness = 0.36
         const circum = 2 * Math.PI * radius
         const uRepeat = circum / (ringHeight * ringTex.userData.aspect)
+        const geom = useExtrudedBand
+          ? new THREE.BoxGeometry(Math.PI * 2, ringHeight, zThickness, 128, 1, 1)
+          : new THREE.PlaneGeometry(Math.PI * 2, ringHeight, 128, 1)
 
+        const pos = geom.attributes.position
+        const uvs = geom.attributes.uv
         for (let i = 0; i < pos.count; i++) {
           const x_flat = pos.getX(i)
           const y_flat = pos.getY(i)
+          const z_flat = pos.getZ(i)
           const theta = x_flat
           const rad = radius + y_flat
-          pos.setXY(i, rad * Math.cos(theta), rad * Math.sin(theta))
+          pos.setXYZ(i, rad * Math.cos(theta), rad * Math.sin(theta), z_flat)
           const u = (1 - (x_flat + Math.PI) / (Math.PI * 2)) * uRepeat
           const v = (y_flat + ringHeight / 2) / ringHeight
           uvs.setXY(i, u, v)
         }
         geom.computeVertexNormals()
+
+        const ringMap = useExtrudedBand ? ringTex.clone() : ringTex
+        if (useExtrudedBand) {
+          ringMap.wrapS = THREE.RepeatWrapping
+          ringMap.wrapT = THREE.RepeatWrapping
+          ringMap.repeat.set(uRepeat, 1)
+          ringMap.needsUpdate = true
+        }
+
         const mat = new THREE.MeshStandardMaterial({
-          map: ringTex,
-          metalnessMap: ringTex,
-          roughness: 0.08,
-          metalness: 0.9,
-          envMapIntensity: 1.8,
+          map: ringMap,
+          roughness: 0.82,
+          metalness: 0.08,
+          envMapIntensity: 0.12,
           side: THREE.DoubleSide,
           transparent: true,
           emissive: currentEmissiveColor,
@@ -273,33 +315,65 @@ export function useThreeScene({
       return
     }
 
-    const spacing = 0.55
+    const spacing = s.mode === 'radial' ? 0.68 : 0.55
     const cols = aspect < 1 ? 6 : 14
     const rows = aspect < 1 ? 10 : 8
 
     const geom =
       s.mode === 'radial'
-        ? new THREE.CylinderGeometry(0.25, 0.25, 0.5, 32)
+        ? new THREE.CylinderGeometry(0.25, 0.25, 0.22, 64, 1, false)
         : new THREE.BoxGeometry(0.5, 0.5, 0.5)
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const char = (s.text.length > 0 ? s.text : ' ')[(r * cols + c) % s.text.length]
         const tex = getCharTex(char)
-        const mat = new THREE.MeshStandardMaterial({
-          map: tex,
-          metalnessMap: tex,
-          roughness: 0.12,
-          metalness: 0.95,
-          envMapIntensity: 1.2,
-          emissive: currentEmissiveColor,
-          emissiveIntensity: 0
-        })
+        const displayTex = s.mode === 'radial' ? tex.clone() : tex
+        if (s.mode === 'radial') {
+          displayTex.center.set(0.5, 0.5)
+          displayTex.rotation = Math.PI / 2
+        }
+        const mat =
+          s.mode === 'radial'
+            ? [
+                new THREE.MeshStandardMaterial({
+                  color: palette.bg,
+                  roughness: 0.82,
+                  metalness: 0.02,
+                  envMapIntensity: 0.04,
+                  emissive: currentEmissiveColor,
+                  emissiveIntensity: 0
+                }),
+                new THREE.MeshStandardMaterial({
+                  map: displayTex,
+                  roughness: 0.74,
+                  metalness: 0.06,
+                  envMapIntensity: 0.08,
+                  emissive: currentEmissiveColor,
+                  emissiveIntensity: 0
+                }),
+                new THREE.MeshStandardMaterial({
+                  map: displayTex,
+                  roughness: 0.74,
+                  metalness: 0.06,
+                  envMapIntensity: 0.08,
+                  emissive: currentEmissiveColor,
+                  emissiveIntensity: 0
+                })
+              ]
+            : new THREE.MeshStandardMaterial({
+                map: displayTex,
+                roughness: 0.74,
+                metalness: 0.06,
+                envMapIntensity: 0.08,
+                emissive: currentEmissiveColor,
+                emissiveIntensity: 0
+              })
         const mesh = new THREE.Mesh(geom, mat)
         const x = (c - cols / 2 + 0.5) * spacing
         const y = (rows / 2 - r - 0.5) * spacing
         mesh.position.set(x, y, 0)
-        if (s.mode === 'radial') mesh.rotation.x = Math.PI / 2
+        if (s.mode === 'radial') mesh.rotation.set(Math.PI / 2, 0, 0)
         group.add(mesh)
         blocks.push({
           mesh,
@@ -317,7 +391,7 @@ export function useThreeScene({
 
   useEffect(() => {
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(palette.bg)
+    scene.background = new THREE.Color(backgroundColor)
 
     const camera = new THREE.PerspectiveCamera(
       40,
@@ -325,7 +399,7 @@ export function useThreeScene({
       0.1,
       100
     )
-    camera.position.z = 10
+    applyCameraTransform(camera)
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.setSize(window.innerWidth, window.innerHeight)
@@ -346,6 +420,69 @@ export function useThreeScene({
 
     const group = new THREE.Group()
     scene.add(group)
+
+    const handlePointerDown = (e) => {
+      if (e.button !== 0 && e.button !== 1) return
+      if (e.button === 1) e.preventDefault()
+      cameraStateRef.current.isDragging = true
+      cameraStateRef.current.dragMode = e.button === 1 ? 'pan' : 'rotate'
+      cameraStateRef.current.lastX = e.clientX
+      cameraStateRef.current.lastY = e.clientY
+      renderer.domElement.style.cursor = e.button === 1 ? 'move' : 'grabbing'
+    }
+
+    const handlePointerMove = (e) => {
+      const c = cameraStateRef.current
+      if (!c.isDragging) return
+      const dx = e.clientX - c.lastX
+      const dy = e.clientY - c.lastY
+      c.lastX = e.clientX
+      c.lastY = e.clientY
+
+      if (c.dragMode === 'pan') {
+        const panScale = c.radius * 0.0018
+        const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0)
+        const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1)
+        c.target.addScaledVector(right, -dx * panScale)
+        c.target.addScaledVector(up, dy * panScale)
+      } else {
+        c.yaw += dx * 0.005
+        c.pitch += dy * 0.005
+        c.pitch = Math.max(-1.35, Math.min(1.35, c.pitch))
+      }
+
+      applyCameraTransform(camera)
+    }
+
+    const handlePointerUp = () => {
+      cameraStateRef.current.isDragging = false
+      cameraStateRef.current.dragMode = 'none'
+      renderer.domElement.style.cursor = 'grab'
+    }
+
+    const handleWheel = (e) => {
+      e.preventDefault()
+      const c = cameraStateRef.current
+      c.radius += e.deltaY * 0.01
+      c.radius = Math.max(4, Math.min(24, c.radius))
+      applyCameraTransform(camera)
+    }
+
+    const handleDoubleClick = () => {
+      const c = cameraStateRef.current
+      c.yaw = 0
+      c.pitch = 0
+      c.radius = 10
+      c.target.set(0, 0, 0)
+      applyCameraTransform(camera)
+    }
+
+    renderer.domElement.style.cursor = 'grab'
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    renderer.domElement.addEventListener('wheel', handleWheel, { passive: false })
+    renderer.domElement.addEventListener('dblclick', handleDoubleClick)
 
     sceneRef.current = {
       ...sceneRef.current,
@@ -387,7 +524,7 @@ export function useThreeScene({
             if (s.isRotationEnabled)
               b.mesh.rotation.z = st * s.rotSpeed * direction * ringSpeedFactor
             const wave = Math.sin(st * s.speed + b.ringIndex * s.phase * 6)
-            b.mesh.position.z = b.ringIndex * -0.01 + wave * 0.4
+            b.mesh.position.z = b.ringIndex * -0.35 + wave * 0.4
             glow = wave
           } else {
             const ringSpeedFactor = 1.0 / (1 + b.ringIndex * 0.35)
@@ -398,13 +535,14 @@ export function useThreeScene({
             glow = wave
           }
         } else {
-          b.mesh.rotation.set(s.mode === 'radial' ? Math.PI / 2 : 0, 0, 0)
+          if (s.mode === 'radial') b.mesh.rotation.set(Math.PI / 2, 0, 0)
+          else b.mesh.rotation.set(0, 0, 0)
           b.mesh.position.set(b.baseX, b.baseY, 0)
           b.mesh.scale.set(1, 1, 1)
 
           switch (s.mode) {
             case 'fractal': {
-              const n = hashNoise(b.r, b.c, Math.floor(st * s.speed), s.seed)
+              const n = hashNoise(b.r, b.c, st * s.speed, s.seed)
               b.mesh.position.z = n * s.depth * 4
               if (s.isRotationEnabled) b.mesh.rotation.x = st * s.rotSpeed + n
               glow = n
@@ -445,11 +583,17 @@ export function useThreeScene({
           }
         }
 
-        b.mesh.material.emissiveIntensity =
+        const emissiveIntensity =
           s.isSpeedEnabled && s.isColorEnabled ? Math.pow(Math.max(0, glow), 2) * 0.25 : 0
+        const mats = Array.isArray(b.mesh.material) ? b.mesh.material : [b.mesh.material]
+        mats.forEach((m) => {
+          m.emissiveIntensity = emissiveIntensity
+        })
 
         if (b.type === 'block') {
-          b.mesh.scale.set(1, 1, 1 + s.depth * 8)
+          if (s.mode === 'radial') b.mesh.scale.set(1, 1, 1)
+          else if (s.mode === 'horizontal') b.mesh.scale.set(0.98, 0.98, 0.98 + s.depth * 8)
+          else b.mesh.scale.set(1, 1, 1 + s.depth * 8)
         }
       })
 
@@ -468,6 +612,11 @@ export function useThreeScene({
 
     window.addEventListener('resize', handleResize)
     return () => {
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      renderer.domElement.removeEventListener('wheel', handleWheel)
+      renderer.domElement.removeEventListener('dblclick', handleDoubleClick)
       window.removeEventListener('resize', handleResize)
       cancelAnimationFrame(frameId)
 
@@ -488,6 +637,12 @@ export function useThreeScene({
       }
     }
   }, [])
+
+  useEffect(() => {
+    const { scene } = sceneRef.current
+    if (!scene) return
+    scene.background = new THREE.Color(backgroundColor)
+  }, [backgroundColor])
 
   useEffect(() => {
     const { texCache } = sceneRef.current
