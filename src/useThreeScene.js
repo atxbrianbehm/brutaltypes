@@ -207,7 +207,7 @@ export function useThreeScene({
         const theta = x_flat
         const r = k * theta + 0.6 + y_flat
         pos.setXY(i, r * Math.cos(theta), r * Math.sin(theta))
-        const u = (x_flat / (turns * Math.PI * 2)) * uRepeat
+        const u = (1 - x_flat / (turns * Math.PI * 2)) * uRepeat
         const v = (y_flat + height / 2) / height
         uvs.setXY(i, u, v)
       }
@@ -248,7 +248,7 @@ export function useThreeScene({
           const theta = x_flat
           const rad = radius + y_flat
           pos.setXY(i, rad * Math.cos(theta), rad * Math.sin(theta))
-          const u = ((x_flat + Math.PI) / (Math.PI * 2)) * uRepeat
+          const u = (1 - (x_flat + Math.PI) / (Math.PI * 2)) * uRepeat
           const v = (y_flat + ringHeight / 2) / ringHeight
           uvs.setXY(i, u, v)
         }
