@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { palette } from './palette'
 
-// --- Simple Deterministic Noise for Fractal Seed ---
 const hashNoise = (x, y, z, seed) => {
   const p = (x * 12.9898 + y * 78.233 + z * 43.123 + seed * 91.432)
   const q = (z * 13.1313 + x * 93.939 + y * 17.171)
@@ -79,12 +79,12 @@ export function useThreeScene({
     canvas.width = size
     canvas.height = size
     const ctx = canvas.getContext('2d')
-    ctx.fillStyle = '#0a0b0e'
+    ctx.fillStyle = palette.bg
     ctx.fillRect(0, 0, size, size)
     for (let i = 0; i < 8; i++) {
       for (let j = 0; j < 8; j++) {
         const brightness = 35 + Math.random() * 25
-        ctx.fillStyle = `rgb(${brightness}, ${brightness + 2}, ${brightness + 4})`
+        ctx.fillStyle = `rgba(${brightness}, ${brightness + 2}, ${brightness + 4}, 0.15)`
         ctx.fillRect(i * 16 + 1, j * 16 + 1, 14, 14)
       }
     }
@@ -111,9 +111,9 @@ export function useThreeScene({
     canvas.width = w
     canvas.height = h
 
-    ctx.fillStyle = '#0f1115'
+    ctx.fillStyle = palette.bg
     ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = palette.ink
     ctx.font = fontStr
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -140,9 +140,9 @@ export function useThreeScene({
     canvas.height = 256
 
     const ctx = canvas.getContext('2d')
-    ctx.fillStyle = '#0f1115'
+    ctx.fillStyle = palette.bg
     ctx.fillRect(0, 0, 256, 256)
-    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = palette.ink
     ctx.font = `900 148px ${fontFamily}`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -317,7 +317,7 @@ export function useThreeScene({
 
   useEffect(() => {
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x0a0b0e)
+    scene.background = new THREE.Color(palette.bg)
 
     const camera = new THREE.PerspectiveCamera(
       40,
@@ -336,9 +336,13 @@ export function useThreeScene({
     const envMap = createEnvMap()
     scene.environment = envMap
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.85))
-    const wanderLight = new THREE.PointLight(0xffffff, 0.6, 80)
-    scene.add(wanderLight)
+    scene.add(new THREE.AmbientLight(0xffffff, 1.15))
+    const key = new THREE.DirectionalLight(0xffffff, 0.55)
+    key.position.set(6, 10, 12)
+    scene.add(key)
+    const fill = new THREE.DirectionalLight(0xffffff, 0.25)
+    fill.position.set(-8, -6, 8)
+    scene.add(fill)
 
     const group = new THREE.Group()
     scene.add(group)
@@ -349,7 +353,6 @@ export function useThreeScene({
       camera,
       renderer,
       group,
-      wanderLight,
       envMap
     }
 
@@ -357,26 +360,10 @@ export function useThreeScene({
 
     let frameId
     const animate = () => {
-      const { renderer, scene, camera, blocks, clock, wanderLight } = sceneRef.current
+      const { renderer, scene, camera, blocks, clock } = sceneRef.current
       const t = clock.getElapsedTime()
       const s = stateRef.current
       const st = s.posterize >= 60 ? t : Math.floor(t * s.posterize) / s.posterize
-
-      if (s.isWanderEnabled && s.isColorEnabled) {
-        const wanderSpeed = st * 0.06
-        wanderLight.color.set(s.accentColor)
-        wanderLight.position.set(
-          Math.sin(wanderSpeed) * 18,
-          Math.cos(wanderSpeed * 0.5) * 15,
-          8
-        )
-        wanderLight.intensity = 0.6 + Math.sin(st * 0.1) * 0.2
-      } else if (s.isWanderEnabled) {
-        wanderLight.color.set(0xffffff)
-        wanderLight.intensity = 0.3
-      } else {
-        wanderLight.intensity = 0
-      }
 
       blocks.forEach((b) => {
         let glow = 0
